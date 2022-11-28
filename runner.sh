@@ -12,6 +12,11 @@ USERNAME='coder'
 # This is encoded in the tarball, double-check
 LOCAL_DIR="root.$ARCHITECTURE"
 
+MONOREPO_REMOTE='git@github.com:christopherfujino/chris-monorepo'
+DOTFILES='git@github.com:christopherfujino/dotfiles'
+
+RUNNER='runner.sh'
+
 function usage_exit {
   echo 'Usage: runner.sh [function]' >&2
   echo 'where [function] is one of:' >&2
@@ -22,6 +27,7 @@ function usage_exit {
   exit 1
 }
 
+# run as user on host
 function bootstrap {
   set -o xtrace
 
@@ -40,20 +46,27 @@ function bootstrap {
   sudo sed -E -i 's/^CheckSpace/#CheckSpace/' "$LOCAL_DIR/etc/pacman.conf"
 }
 
+# run as user on host
 function attach {
   set -o xtrace
 
-  RUNNER='runner.sh'
   # -ot is older than
   if [ ! -f "$LOCAL_DIR/$RUNNER" ] || [ "$LOCAL_DIR/$RUNNER" -ot "$RUNNER" ]; then
     sudo cp "$RUNNER" "$LOCAL_DIR/$RUNNER"
   fi
 
+  if [ ! -f "$HOME/.ssh/id_rsa" ]; then
+    echo "Expected $HOME/.ssh/id_rsa to exist to copy to chroot" >&2
+    exit 1
+  fi
+
+  sudo cp -r "$HOME/.ssh/" "$LOCAL_DIR"
+
   # chroot
   sudo "$LOCAL_DIR/bin/arch-chroot" "$LOCAL_DIR/" "/$RUNNER" 'initialize-root'
 }
 
-# should be run as root
+# should be run as root in chroot
 function initialize-root {
   # TODO test userid is 0
   # TODO test if we already did this
@@ -83,18 +96,34 @@ function initialize-root {
     useradd -m -s /bin/bash "$USERNAME"
 
     passwd "$USERNAME"
-  else
-    echo "User $USERNAME already exists"
+
+    # Don't worry about security within chroot
+    echo "$USERNAME ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
   fi
 
   su --login "$USERNAME"
 }
 
+# run as user in chroot
 function initialize-user {
   set -o xtrace
 
-  # TODO check not userid 0
-  ssh-keygen
+  TOUCH_FILE="$HOME/.initialized_user"
+
+  if [ ! -f "$TOUCHFILE" ] || [ "$TOUCHFILE" -ot "/$RUNNER" ]; then
+    # TODO check not userid 0
+
+    if [ ! -d "$HOME/.ssh" ]; then
+      sudo cp -r /.ssh "$HOME"
+      sudo chown --recursive $(id -u):$(id -g) "$HOME/.ssh"
+    fi
+
+    git clone "$MONOREPO_REMOTE"
+    git clone "$DOTFILES"
+    ln -s -f "$DOTFILES/.bashrc" "$HOME/.bashrc"
+
+    touch "$TOUCH_FILE"
+  fi
 }
 
 if [ $# -ne 1 ]; then
