@@ -31,23 +31,37 @@ function usage_exit {
 function bootstrap {
   set -o xtrace
 
+  if [ "$EUID" -eq 0 ]; then
+    echo 'bootstrap function should not be called by root' >&2
+    exit 1
+  fi
+
   LOCAL_TARBALL='arch-tarball.tar.gz'
 
-  curl -l "$REMOTE_BOOTSTRAP_TARBALL" -o "$LOCAL_TARBALL"
+  if [ ! -f "$LOCAL_TARBALL" ]; then
+    curl -l "$REMOTE_BOOTSTRAP_TARBALL" -o "$LOCAL_TARBALL"
+  fi
 
-  # --numeric-owner since host might not use the same user id's as arch
-  sudo tar xzf "$LOCAL_TARBALL" --numeric-owner
+  if [ ! -d "$LOCAL_DIR" ]; then
+    # --numeric-owner since host might not use the same user id's as arch
+    sudo tar xzf "$LOCAL_TARBALL" --numeric-owner
 
-  # Enable berkeley mirror
-  # -E means extended regex
-  # -i means update file in place
-  sudo sed -E -i 's/^#(.*berkeley)/\1/' "$LOCAL_DIR/etc/pacman.d/mirrorlist"
-  # disable CheckSpace setting
-  sudo sed -E -i 's/^CheckSpace/#CheckSpace/' "$LOCAL_DIR/etc/pacman.conf"
+    # Enable berkeley mirror
+    # -E means extended regex
+    # -i means update file in place
+    sudo sed -E -i 's/^#(.*berkeley)/\1/' "$LOCAL_DIR/etc/pacman.d/mirrorlist"
+    # disable CheckSpace setting
+    sudo sed -E -i 's/^CheckSpace/#CheckSpace/' "$LOCAL_DIR/etc/pacman.conf"
+  fi
 }
 
 # run as user on host
 function attach {
+  if [ "$EUID" -eq 0 ]; then
+    echo 'attach function should not be called by root' >&2
+    exit 1
+  fi
+
   set -o xtrace
 
   # -ot is older than
@@ -60,7 +74,9 @@ function attach {
     exit 1
   fi
 
-  sudo cp -r "$HOME/.ssh/" "$LOCAL_DIR"
+  if [ ! -d "$LOCAL_DIR/.ssh" ]; then
+    sudo cp -r "$HOME/.ssh/" "$LOCAL_DIR"
+  fi
 
   # chroot
   sudo "$LOCAL_DIR/bin/arch-chroot" "$LOCAL_DIR/" "/$RUNNER" 'initialize-root'
@@ -68,61 +84,88 @@ function attach {
 
 # should be run as root in chroot
 function initialize-root {
-  # TODO test userid is 0
-  # TODO test if we already did this
+  if [ "$EUID" -ne 0 ]; then
+    echo 'initialize-root function should be called by root' >&2
+    exit 1
+  fi
 
   set -o xtrace
 
-  # setup public keyring for pacman
-  pacman-key --init
+  TOUCHFILE='/.initialized_root'
+  if [ ! -f "$TOUCHFILE" ] || [ "$TOUCHFILE" -ot "/$RUNNER" ]; then
+    echo "$TOUCHFILE cache miss"
+    # setup public keyring for pacman
+    pacman-key --init
 
-  # verifying the master keys
-  pacman-key --populate
+    # verifying the master keys
+    pacman-key --populate
 
-  pacman -Syu
+    pacman -Syu
 
-  # openssh needed to git clone via ssh
-  pacman -S \
-    base-devel \
-    man-db \
-    vim \
-    git \
-    openssh \
-    tmux \
-    sudo
+    # openssh needed to git clone via ssh
+    # unzip is needed by Flutter
+    # cmake is needed to build Neovim
+    # --needed means do not reinstall already present packages
+    pacman -S --needed \
+      base-devel \
+      man-db \
+      vim \
+      git \
+      openssh \
+      tmux \
+      sudo \
+      unzip \
+      cmake \
+      fzf
 
-  if ! id -u "$USERNAME"; then
-    echo "creating $USERNAME user..."
-    useradd -m -s /bin/bash "$USERNAME"
+    if ! id -u "$USERNAME" >/dev/null; then
+      echo "creating user $USERNAME..."
+      useradd -m -s /bin/bash "$USERNAME"
 
-    passwd "$USERNAME"
+      passwd "$USERNAME"
 
-    # Don't worry about security within chroot
-    echo "$USERNAME ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+      # Don't worry about security within chroot
+      echo "$USERNAME ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+    fi
+
+    touch "$TOUCHFILE"
   fi
+
+  # re-entrant call as user
+  sudo -u "$USERNAME" "/$RUNNER" 'initialize-user'
 
   su --login "$USERNAME"
 }
 
-# run as user in chroot
+# run as root in chroot
 function initialize-user {
   set -o xtrace
 
-  TOUCH_FILE="$HOME/.initialized_user"
+  if [ "$EUID" -eq 0 ]; then
+    echo 'initialize-user function should not be called by root' >&2
+    exit 1
+  fi
+
+  cd ~
+
+  TOUCHFILE="$HOME/.initialized_user"
 
   if [ ! -f "$TOUCHFILE" ] || [ "$TOUCHFILE" -ot "/$RUNNER" ]; then
-    # TODO check not userid 0
-
     if [ ! -d "$HOME/.ssh" ]; then
       sudo cp -r /.ssh "$HOME"
       sudo chown --recursive $(id -u):$(id -g) "$HOME/.ssh"
     fi
 
-    git clone "$MONOREPO_REMOTE"
-    git clone "$DOTFILES"
-    ln -s -f "$DOTFILES/.bashrc" "$HOME/.bashrc"
+    if [ ! -d "$HOME/git/chris-monorepo" ]; then
+      git clone "$MONOREPO_REMOTE" "$HOME/git/chris-monorepo"
+    fi
+    if [ ! -d "$HOME/git/dotfiles" ]; then
+      git clone "$DOTFILES" "$HOME/git/dotfiles"
+      # TODO this should just be repo init scripts
+      ln -s -f "$HOME/dotfiles/.bashrc" "$HOME/.bashrc"
+    fi
 
-    touch "$TOUCH_FILE"
+    touch "$TOUCHFILE"
   fi
 }
 
@@ -141,8 +184,6 @@ case "$1" in
     initialize-root
     ;;
   'initialize-user')
-    echo "Oops $1 is not yet implemented" >&2
-    exit 1
     initialize-user
     ;;
   *)
