@@ -116,6 +116,7 @@ function initialize-root {
       sudo \
       unzip \
       cmake \
+      ripgrep \
       fzf
 
     if ! id -u "$USERNAME" >/dev/null; then
