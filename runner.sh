@@ -44,6 +44,7 @@ function bootstrap {
 
   if [ ! -d "$LOCAL_DIR" ]; then
     # --numeric-owner since host might not use the same user id's as arch
+    # Must have root permission as there are some UID 0 files
     sudo tar xzf "$LOCAL_TARBALL" --numeric-owner
 
     # Enable berkeley mirror
