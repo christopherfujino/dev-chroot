@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 )
 
@@ -28,10 +29,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		err = bootstrap(defaultConfig)
-		if err != nil {
-			panic(err)
-		}
+		bootstrap(defaultConfig, http.Get)
 	case "attach":
 		err := attachCmd.Parse(os.Args[2:])
 		if err != nil {
