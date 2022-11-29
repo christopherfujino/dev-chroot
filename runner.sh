@@ -164,7 +164,7 @@ function initialize-user {
     if [ ! -d "$HOME/git/dotfiles" ]; then
       git clone "$DOTFILES" "$HOME/git/dotfiles"
       # TODO this should just be repo init scripts
-      ln -s -f "$HOME/dotfiles/.bashrc" "$HOME/.bashrc"
+      ln -s -f "$HOME/git/dotfiles/.bashrc" "$HOME/.bashrc"
     fi
 
     touch "$TOUCHFILE"
