@@ -67,7 +67,9 @@ function attach {
 
   # -ot is older than
   if [ ! -f "$LOCAL_DIR/$RUNNER" ] || [ "$LOCAL_DIR/$RUNNER" -ot "$RUNNER" ]; then
-    sudo cp "$RUNNER" "$LOCAL_DIR/$RUNNER"
+    sudo cp --preserve=mode "$RUNNER" "$LOCAL_DIR/$RUNNER"
+    # We want global read/execute permissions, which git doesn't track
+    sudo chmod 755 "$LOCAL_DIR/$RUNNER"
   fi
 
   if [ ! -f "$HOME/.ssh/id_rsa" ]; then
@@ -77,6 +79,8 @@ function attach {
 
   if [ ! -d "$LOCAL_DIR/.ssh" ]; then
     sudo cp -r "$HOME/.ssh/" "$LOCAL_DIR"
+    # ensure our coder user can copy this
+    sudo chmod +r "$LOCAL_DIR/.ssh"
   fi
 
   # chroot
@@ -139,7 +143,7 @@ function initialize-root {
   su --login "$USERNAME"
 }
 
-# run as root in chroot
+# run as user in chroot
 function initialize-user {
   set -o xtrace
 
