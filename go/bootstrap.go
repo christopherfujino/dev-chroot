@@ -1,11 +1,16 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 //  if [ ! -d "$LOCAL_DIR" ]; then
@@ -31,12 +36,24 @@ func bootstrap(
 ) {
 	// Get effective UID in case they are using sudo
 	uid := os.Geteuid()
-	if uid == 0 {
-		panic(fmt.Errorf("bootstrap should be called as a regular user from the host"))
+	if uid != 0 {
+		panic(fmt.Errorf("bootstrap should be called as root from the host"))
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	if cwd != "/home/fujino/git/dev-chroot/go" {
+		log.Fatalf("CWD = %s", cwd)
 	}
 	fmt.Println("Bootstrapping chroot locally")
-	downloadTarball(httpGetter, config.remoteBootstrapTarball, config.localBootstrapTarball)
-	extractTarball(config.localBootstrapTarball)
+	downloadTarball(
+		httpGetter,
+		config.remoteBootstrapTarball,
+		filepath.Join(cwd, config.localBootstrapTarball),
+	)
+	extractTarball(config.localBootstrapTarball, cwd)
 }
 
 // Download remote tarball to local disk, unless the localPath already exists.
@@ -50,7 +67,7 @@ func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string)
 		}
 		return
 	}
-	localFile, err := os.Create(localPath) // TODO append to working dir
+	localFile, err := os.Create(localPath)
 	if err != nil {
 		panic(err)
 	}
@@ -66,4 +83,48 @@ func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string)
 	}
 }
 
-func extractTarball(localTarball string) {}
+func extractTarball(localTarball string, cwd string) {
+	file, err := os.Open(filepath.Join(cwd, localTarball))
+	if err != nil {
+		panic(err)
+	}
+	tarRaw, err := gzip.NewReader(file)
+	if err != nil {
+		panic(err)
+	}
+	tarReader := tar.NewReader(tarRaw)
+
+	for true {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Error %s reading %s", err.Error(), localTarball)
+		}
+
+		extractEntity(header, cwd)
+	}
+}
+
+func extractEntity(header *tar.Header, cwd string) {
+	switch header.Typeflag {
+	case tar.TypeDir:
+		//fmt.Printf("%s\tdir\t0%o\n", header.Name, header.Mode)
+		newpath := filepath.Join(cwd, header.Name)
+		os.Mkdir(newpath, fs.FileMode(header.Mode))
+		err := os.Chown(newpath, header.Uid, header.Gid)
+		if err != nil {
+			panic(err)
+		}
+	case tar.TypeReg:
+		fmt.Printf("%s\tfile\t0%o\n", header.Name, header.Mode)
+		//fmt.Printf("Making %s", filepath.Join(cwd, header.Name))
+	case tar.TypeLink:
+		fmt.Printf("%s -> %s\thard link\towned by %d\n", header.Name, header.Linkname, header.Uid)
+	case tar.TypeSymlink:
+		fmt.Printf("%s -> %s\tsymlink\towned by %d\n", header.Name, header.Linkname, header.Uid)
+	default:
+		log.Fatalf("%s has an unknown Tar type '%c'\n", header.Name, header.Typeflag)
+	}
+}
