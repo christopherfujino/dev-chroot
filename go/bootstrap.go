@@ -84,7 +84,8 @@ func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string)
 }
 
 func extractTarball(localTarball string, cwd string) {
-	file, err := os.Open(filepath.Join(cwd, localTarball))
+	var absoluteTarballPath = filepath.Join(cwd, localTarball)
+	file, err := os.Open(absoluteTarballPath)
 	if err != nil {
 		panic(err)
 	}
@@ -93,38 +94,125 @@ func extractTarball(localTarball string, cwd string) {
 		panic(err)
 	}
 	tarReader := tar.NewReader(tarRaw)
+	var linkQueue = LinkQueue{}
 
 	for true {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
-		if err != nil {
-			log.Fatalf("Error %s reading %s", err.Error(), localTarball)
+		check(
+			err,
+			fmt.Sprintf("reading %s", absoluteTarballPath),
+		)
+		newpath := filepath.Join(cwd, header.Name)
+		switch header.Typeflag {
+		case tar.TypeDir: // Directory
+			os.Mkdir(newpath, fs.FileMode(header.Mode))
+			err := os.Chown(newpath, header.Uid, header.Gid)
+			check(err, fmt.Sprintf("chown of %s to %d:%d", newpath, header.Uid, header.Gid))
+			fmt.Printf("Created dir %s\n", header.Name)
+		case tar.TypeReg: // File
+			file := create(newpath)
+			_ = copyBuffer(
+				file,
+				tarReader,
+				fmt.Sprintf("extracting %s from %s", newpath, absoluteTarballPath),
+			)
+			chown(newpath, header.Uid, header.Gid)
+			chmod(newpath, header.Mode)
+			fmt.Printf("Created file %s\n", header.Name)
+			file.Close()
+		case tar.TypeLink: // Hard link
+			var destination = newpath
+			var source = filepath.Join(cwd, header.Linkname)
+			linkQueue.TryHardlink(
+				source,
+				destination,
+				func () {
+					chown(destination, header.Uid, header.Gid)
+					chmod(destination, header.Mode)
+					fmt.Printf("Created hard link %s -> %s\n", header.Name, header.Linkname)
+				},
+			)
+			//log.Fatalf("Unimplemented type hard link")
+		case tar.TypeSymlink: // Symlink
+			var destination = newpath
+			// This might be a relative path, so don't concatenate with CWD
+			var source string
+			if filepath.IsAbs(header.Linkname) {
+				var rootPath = getRoot(header.Name)
+				source = filepath.Join(cwd, rootPath, header.Linkname)
+			} else {
+				source = header.Linkname
+			}
+			linkQueue.TrySymlink(
+				source,
+				destination,
+				func () {
+					chown(destination, header.Uid, header.Gid)
+					//chmod(destination, header.Mode) // not needed on linux
+					fmt.Printf("Created symlink %s -> %s\n", header.Name, header.Linkname)
+				},
+			)
+		default:
+			log.Fatalf("%s has an unknown Tar type '%c'\n", header.Name, header.Typeflag)
 		}
+	}
 
-		extractEntity(header, cwd)
+	fmt.Printf("%d link tasks enqueued\n", len(linkQueue.queue))
+	for _, task := range linkQueue.queue {
+		task.Callback()
 	}
 }
 
-func extractEntity(header *tar.Header, cwd string) {
-	switch header.Typeflag {
-	case tar.TypeDir:
-		//fmt.Printf("%s\tdir\t0%o\n", header.Name, header.Mode)
-		newpath := filepath.Join(cwd, header.Name)
-		os.Mkdir(newpath, fs.FileMode(header.Mode))
-		err := os.Chown(newpath, header.Uid, header.Gid)
-		if err != nil {
-			panic(err)
-		}
-	case tar.TypeReg:
-		fmt.Printf("%s\tfile\t0%o\n", header.Name, header.Mode)
-		//fmt.Printf("Making %s", filepath.Join(cwd, header.Name))
-	case tar.TypeLink:
-		fmt.Printf("%s -> %s\thard link\towned by %d\n", header.Name, header.Linkname, header.Uid)
-	case tar.TypeSymlink:
-		fmt.Printf("%s -> %s\tsymlink\towned by %d\n", header.Name, header.Linkname, header.Uid)
-	default:
-		log.Fatalf("%s has an unknown Tar type '%c'\n", header.Name, header.Typeflag)
+// Create a file.
+func create(path string) *os.File {
+	file, err := os.Create(path)
+	check(err, fmt.Sprintf("creating %s", path))
+	return file
+}
+
+// Change owner of file.
+//
+// If the given file is a link, change the link itself.
+func chown(path string, uid int, gid int) {
+	err := os.Lchown(path, uid, gid)
+	check(err, fmt.Sprintf("chown of %s to %d:%d", path, uid, gid))
+}
+
+// Change mode of file.
+//
+// No-op if the file is a symlink (TODO: fix for MacOS
+// https://unix.stackexchange.com/questions/87200/change-permissions-for-a-symbolic-link)
+func chmod(path string, mode int64) {
+	fileInfo, err := os.Lstat(path)
+	check(
+		err,
+		fmt.Sprintf("checking Lstat of %s", path),
+	)
+	if fileInfo.Mode() & os.ModeSymlink > 0 {
+		log.Fatalf("skipping chmod on %s as it is a symlink", path)
+		return
 	}
+	err = os.Chmod(path, fs.FileMode(mode))
+	check(err, fmt.Sprintf("chmod of %s to %o", path, mode))
+}
+
+func copyBuffer(destination io.Writer, source io.Reader, errMessage string) int64 {
+	length, err := io.Copy(destination, source)
+	check(err, errMessage)
+	return length
+}
+
+func getRoot(path string) string {
+	var lastDir = filepath.Dir(path)
+	var currentDir = filepath.Dir(lastDir)
+	// If this was a relative path, we want the lastDir before the dot.
+	// If this was an absolute path, we want top-level slash.
+	for currentDir != "." && lastDir != currentDir {
+		lastDir = currentDir
+		currentDir = filepath.Dir(lastDir)
+	}
+	return lastDir
 }
