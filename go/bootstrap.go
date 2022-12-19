@@ -151,7 +151,7 @@ func extractTarball(localTarball string, cwd string) {
 				destination,
 				func () {
 					chown(destination, header.Uid, header.Gid)
-					//chmod(destination, header.Mode) // not needed on linux
+					// TODO chmod symlinks on macOS
 					fmt.Printf("Created symlink %s -> %s\n", header.Name, header.Linkname)
 				},
 			)
@@ -160,10 +160,12 @@ func extractTarball(localTarball string, cwd string) {
 		}
 	}
 
-	fmt.Printf("%d link tasks enqueued\n", len(linkQueue.queue))
+	// Run link jobs last
 	for _, task := range linkQueue.queue {
 		task.Callback()
 	}
+
+	fmt.Printf("Finished extracting %s to %s\n", localTarball, cwd)
 }
 
 // Create a file.
