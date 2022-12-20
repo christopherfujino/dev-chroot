@@ -8,6 +8,8 @@ type Config struct {
 	// Name of user created within chroot
 	userName string
 	repos    []Repo
+	// Contents of a /bin/sh script run in chroot as root
+	Provision string
 }
 
 type Repo struct {
@@ -21,8 +23,6 @@ var defaultConfig = Config{
 	remoteBootstrapTarball: "http://mirrors.ocf.berkeley.edu/archlinux/iso/2022.11.01/archlinux-bootstrap-x86_64.tar.gz",
 	localBootstrapTarball: "archlinux-bootstrap.tar.gz",
 	userName:               "coder",
-	// This is encoded in the tarball, double-check
-	localDir: "root.x86_64",
 	repos: []Repo{
 		{
 			remoteUrl: "git@github.com:christopherfujino/chris-monorepo",
@@ -31,4 +31,35 @@ var defaultConfig = Config{
 			remoteUrl: "git@github.com:christopherfujino/dotfiles",
 		},
 	},
+	Provision: `
+# setup public keyring for pacman
+pacman-key --init
+
+# verifying the master keys
+pacman-key --populate
+
+pacman -Syu
+
+# openssh needed to git clone via ssh
+# unzip is needed by Flutter
+# cmake is needed to build Neovim
+# --needed means do not reinstall already present packages
+pacman -S --needed \
+	base-devel \
+	man-db \
+	vim \
+	git \
+	openssh \
+	tmux \
+	sudo \
+	unzip \
+	cmake \
+	ripgrep \
+	fzf
+
+echo "Creating user coder..."
+useradd -m -s /bin/bash coder
+passwd coder
+echo "coder ALL=(ALL:ALL)" >> /etc/sudoers
+`,
 }

@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-	Exec("uname", []string{"-a"})
 	bootstrapCmd := flag.NewFlagSet(
 		"bootstrap",
 		flag.PanicOnError,
@@ -50,7 +49,7 @@ func main() {
 			err,
 			fmt.Sprintf("parsing arguments to attach: %v", os.Args[2:]),
 		)
-		attach(config)
+		attach(config, cwd)
 	default:
 		panic(fmt.Errorf("unrecognized sub-command %s", os.Args[1]))
 	}
