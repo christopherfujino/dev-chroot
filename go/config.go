@@ -9,7 +9,7 @@ type Config struct {
 	UserName string
 	UID      int
 	Repos    []Repo
-	// Contents of hash bang script run in chroot as root
+	// Contents of a hash bang script run once in chroot as root
 	Provision string
 }
 
