@@ -3,9 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"text/template"
 )
 
@@ -34,7 +34,7 @@ func attach(config Config, cwd string) {
 			panic(err)
 		}
 		// Only root needs to execute
-		file, err := os.OpenFile(initializationScriptPath, os.O_CREATE | os.O_WRONLY, 0700)
+		file, err := os.OpenFile(initializationScriptPath, os.O_CREATE|os.O_WRONLY, 0700)
 		check(
 			err,
 			fmt.Sprintf("opening %s in write-only", initializationScriptPath),
@@ -53,7 +53,7 @@ func attach(config Config, cwd string) {
 		file.Close()
 	}
 
-		// TODO copy .ssh folder?
+	// TODO copy .ssh folder?
 
 	var archChroot = filepath.Join(localRoot, "bin", "arch-chroot")
 	if initializationScriptPath != "" {
