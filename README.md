@@ -11,3 +11,4 @@ Chroot tooling for developer workflows.
 - [switching user during execution on Linux](https://stackoverflow.com/questions/46781995/how-can-i-switch-user-during-execution-using-c-on-linux)
   links and warnings about the security implications of running process
   changing its effective user.
+- [Linux containers in 500 lines of code](https://blog.lizzie.io/linux-containers-in-500-loc.html)

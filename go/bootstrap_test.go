@@ -11,7 +11,7 @@ import (
 var config = Config{}
 
 func TestBootstrapDownload(t *testing.T) {
-	return // TODO this is getting skipped if the hard-coded output dir already exists
+	return
 	defer func() {
 		if r := recover(); r != nil {
 			err, ok := r.(error)

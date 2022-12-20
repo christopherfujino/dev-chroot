@@ -23,23 +23,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TODO validate cwd has valid config file, then read config from that file
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	var config = defaultConfig
+
 	switch os.Args[1] {
 	case "bootstrap":
 		err := bootstrapCmd.Parse(os.Args[2:])
+		check(
+			err,
+			fmt.Sprintf("parsing arguments to bootstrap: %v", os.Args[2:]),
+		)
 		if err != nil {
 			panic(err)
 		}
-		bootstrap(defaultConfig, http.Get)
+
+		bootstrap(config, http.Get, cwd)
 	case "attach":
 		err := attachCmd.Parse(os.Args[2:])
-		if err != nil {
-			panic(err)
-		}
-		err = attach(defaultConfig)
-		if err != nil {
-			panic(err)
-		}
+		check(
+			err,
+			fmt.Sprintf("parsing arguments to attach: %v", os.Args[2:]),
+		)
+		attach(config)
 	default:
-		panic(fmt.Errorf("Do not recognize sub-command %s", os.Args[1]))
+		panic(fmt.Errorf("unrecognized sub-command %s", os.Args[1]))
 	}
 }

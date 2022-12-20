@@ -13,26 +13,13 @@ import (
 	"path/filepath"
 )
 
-//  if [ ! -d "$LOCAL_DIR" ]; then
-//    # --numeric-owner since host might not use the same user id's as arch
-//    # Must have root permission as there are some UID 0 files
-//    sudo tar xzf "$LOCAL_TARBALL" --numeric-owner
-//
-//    # Enable berkeley mirror
-//    # -E means extended regex
-//    # -i means update file in place
-//    sudo sed -E -i 's/^#(.*berkeley)/\1/' "$LOCAL_DIR/etc/pacman.d/mirrorlist"
-//    # disable CheckSpace setting
-//    sudo sed -E -i 's/^CheckSpace/#CheckSpace/' "$LOCAL_DIR/etc/pacman.conf"
-//  fi
-//}
-
 type HttpGetter func(url string) (*http.Response, error)
 
 // Should be run as root on the host
 func bootstrap(
 	config Config,
 	httpGetter HttpGetter,
+	cwd string,
 ) {
 	// Get effective UID in case they are using sudo
 	uid := os.Geteuid()
@@ -40,20 +27,23 @@ func bootstrap(
 		panic(fmt.Errorf("bootstrap should be called as root from the host"))
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	if cwd != "/home/fujino/git/dev-chroot/go" {
-		log.Fatalf("CWD = %s", cwd)
-	}
 	fmt.Println("Bootstrapping chroot locally")
 	downloadTarball(
 		httpGetter,
 		config.remoteBootstrapTarball,
 		filepath.Join(cwd, config.localBootstrapTarball),
 	)
-	extractTarball(config.localBootstrapTarball, cwd)
+	localRoot := extractTarball(config.localBootstrapTarball, cwd)
+	processFile(
+		filepath.Join(localRoot, "etc/pacman.d/mirrorlist"),
+		"^#(.*berkeley)",
+		"$1",
+	)
+	processFile(
+		filepath.Join(localRoot, "etc/pacman.conf"),
+		"^CheckSpace",
+		"#CheckSpace",
+	)
 }
 
 // Download remote tarball to local disk, unless the localPath already exists.
@@ -83,7 +73,7 @@ func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string)
 	}
 }
 
-func extractTarball(localTarball string, cwd string) {
+func extractTarball(localTarball string, cwd string) string {
 	var absoluteTarballPath = filepath.Join(cwd, localTarball)
 	file, err := os.Open(absoluteTarballPath)
 	if err != nil {
@@ -95,6 +85,7 @@ func extractTarball(localTarball string, cwd string) {
 	}
 	tarReader := tar.NewReader(tarRaw)
 	var linkQueue = LinkQueue{}
+	var localRoot = ""
 
 	for true {
 		header, err := tarReader.Next()
@@ -108,6 +99,10 @@ func extractTarball(localTarball string, cwd string) {
 		newpath := filepath.Join(cwd, header.Name)
 		switch header.Typeflag {
 		case tar.TypeDir: // Directory
+			if localRoot == "" {
+				// getRoot() will return root relative to CWD
+				localRoot = filepath.Join(cwd, getRoot(header.Name))
+			}
 			os.Mkdir(newpath, fs.FileMode(header.Mode))
 			err := os.Chown(newpath, header.Uid, header.Gid)
 			check(err, fmt.Sprintf("chown of %s to %d:%d", newpath, header.Uid, header.Gid))
@@ -129,7 +124,7 @@ func extractTarball(localTarball string, cwd string) {
 			linkQueue.TryHardlink(
 				source,
 				destination,
-				func () {
+				func() {
 					chown(destination, header.Uid, header.Gid)
 					chmod(destination, header.Mode)
 					fmt.Printf("Created hard link %s -> %s\n", header.Name, header.Linkname)
@@ -149,7 +144,7 @@ func extractTarball(localTarball string, cwd string) {
 			linkQueue.TrySymlink(
 				source,
 				destination,
-				func () {
+				func() {
 					chown(destination, header.Uid, header.Gid)
 					// TODO chmod symlinks on macOS
 					fmt.Printf("Created symlink %s -> %s\n", header.Name, header.Linkname)
@@ -160,12 +155,18 @@ func extractTarball(localTarball string, cwd string) {
 		}
 	}
 
+	if localRoot == "" {
+		panic("Whoops!")
+	}
+
 	// Run link jobs last
 	for _, task := range linkQueue.queue {
 		task.Callback()
 	}
 
-	fmt.Printf("Finished extracting %s to %s\n", localTarball, cwd)
+	fmt.Printf("Finished extracting %s to %s\n", localTarball, localRoot)
+
+	return localRoot
 }
 
 // Create a file.
@@ -193,7 +194,7 @@ func chmod(path string, mode int64) {
 		err,
 		fmt.Sprintf("checking Lstat of %s", path),
 	)
-	if fileInfo.Mode() & os.ModeSymlink > 0 {
+	if fileInfo.Mode()&os.ModeSymlink > 0 {
 		log.Fatalf("skipping chmod on %s as it is a symlink", path)
 		return
 	}
