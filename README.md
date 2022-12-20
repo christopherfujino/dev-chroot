@@ -12,3 +12,5 @@ Chroot tooling for developer workflows.
   links and warnings about the security implications of running process
   changing its effective user.
 - [Linux containers in 500 lines of code](https://blog.lizzie.io/linux-containers-in-500-loc.html)
+- [Kubernetes Mount Propagation](https://medium.com/kokster/kubernetes-mount-propagation-5306c36a4a2d)
+- [Install Arch Linux from existing Linux: Using a chroot environment](https://wiki.archlinux.org/title/Install_Arch_Linux_from_existing_Linux#Using_a_chroot_environment)
