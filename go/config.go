@@ -1,14 +1,15 @@
 package main
 
 type Config struct {
-	remoteBootstrapTarball string
-	localBootstrapTarball string
-	// Path on host where the chroot starts
-	localDir string
+	RemoteBootstrapTarball string
+	LocalBootstrapTarball  string
+	//// Path on host where the chroot starts
+	//LocalDir string
 	// Name of user created within chroot
-	userName string
-	repos    []Repo
-	// Contents of a /bin/sh script run in chroot as root
+	UserName string
+	UID      int
+	Repos    []Repo
+	// Contents of hash bang script run in chroot as root
 	Provision string
 }
 
@@ -20,10 +21,11 @@ type Repo struct {
 // hard-coded
 var defaultConfig = Config{
 	// See https://archlinux.org/download/
-	remoteBootstrapTarball: "http://mirrors.ocf.berkeley.edu/archlinux/iso/2022.11.01/archlinux-bootstrap-x86_64.tar.gz",
-	localBootstrapTarball: "archlinux-bootstrap.tar.gz",
-	userName:               "coder",
-	repos: []Repo{
+	RemoteBootstrapTarball: "http://mirrors.ocf.berkeley.edu/archlinux/iso/2022.11.01/archlinux-bootstrap-x86_64.tar.gz",
+	LocalBootstrapTarball:  "archlinux-bootstrap.tar.gz",
+	UserName:               "coder",
+	UID:                    1000,
+	Repos: []Repo{
 		{
 			remoteUrl: "git@github.com:christopherfujino/chris-monorepo",
 		},
@@ -32,6 +34,8 @@ var defaultConfig = Config{
 		},
 	},
 	Provision: `
+#!/usr/bin/env bash
+
 # setup public keyring for pacman
 pacman-key --init
 
@@ -57,9 +61,9 @@ pacman -S --needed \
 	ripgrep \
 	fzf
 
-echo "Creating user coder..."
-useradd -m -s /bin/bash coder
+echo "Creating user {{.UserName}}..."
+useradd --create-home --uid {{.UID}} --shell /bin/bash {{.UserName}}
 passwd coder
-echo "coder ALL=(ALL:ALL)" >> /etc/sudoers
+echo "{{.UserName}} ALL=(ALL:ALL)" >> /etc/sudoers
 `,
 }

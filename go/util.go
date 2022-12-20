@@ -54,7 +54,6 @@ func processFile(filePath string, pattern string, replacement string) {
 		err,
 		fmt.Sprintf("trying to open file %s for truncation", filePath),
 	)
-	fmt.Printf("Opened file %s for writing\n", file.Name())
 
 	for _, line := range lines {
 		idx, err := file.WriteString(line)
@@ -62,9 +61,7 @@ func processFile(filePath string, pattern string, replacement string) {
 			err,
 			fmt.Sprintf("writing line %d: \"%s\"", idx+1, line),
 		)
-		fmt.Printf("wrote line %s", line)
 	}
-	fmt.Printf("Closing file %s\n", filePath)
 	file.Close()
 }
 

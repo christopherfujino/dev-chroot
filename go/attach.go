@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"os"
 	"os/exec"
+	"text/template"
 )
 
 //   # chroot
@@ -39,7 +40,16 @@ func attach(config Config, cwd string) {
 			fmt.Sprintf("opening %s in write-only", initializationScriptPath),
 		)
 
-		file.WriteString(fmt.Sprintf("#!/usr/bin/env sh\n\n%s", config.Provision))
+		template, err := template.New("config.Provision").Parse(config.Provision)
+		check(
+			err,
+			fmt.Sprintf("trying to create template"),
+		)
+		err = template.Execute(file, config)
+		check(
+			err,
+			"interpolating template",
+		)
 		file.Close()
 	}
 
@@ -59,6 +69,6 @@ func attach(config Config, cwd string) {
 			"running arch-chroot",
 		)
 		fmt.Println("back")
-		Exec(archChroot, []string{localRoot, "su", "--login", "coder"}) // TODO don't use hard-coded name
+		Exec(archChroot, []string{localRoot, "su", "--login", config.UserName})
 	}
 }

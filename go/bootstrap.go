@@ -30,10 +30,10 @@ func bootstrap(
 	fmt.Println("Bootstrapping chroot locally")
 	downloadTarball(
 		httpGetter,
-		config.remoteBootstrapTarball,
-		filepath.Join(cwd, config.localBootstrapTarball),
+		config.RemoteBootstrapTarball,
+		filepath.Join(cwd, config.LocalBootstrapTarball),
 	)
-	localRoot := extractTarball(config.localBootstrapTarball, cwd)
+	localRoot := extractTarball(config.LocalBootstrapTarball, cwd)
 	processFile(
 		filepath.Join(localRoot, "etc/pacman.d/mirrorlist"),
 		"^#(.*berkeley)",
