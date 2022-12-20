@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	Exec("uname", []string{"-a"})
 	bootstrapCmd := flag.NewFlagSet(
 		"bootstrap",
 		flag.PanicOnError,
