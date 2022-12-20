@@ -16,7 +16,6 @@ func Exec(binary string, argv []string) {
 		err,
 		"looking up binary \"uname\"",
 	)
-	fmt.Printf("%s %v", absoluteBinary, append([]string{filepath.Base(binary)}, argv...))
 	if err = syscall.Exec(
 		absoluteBinary,
 		// First element in argv should be name of binary
