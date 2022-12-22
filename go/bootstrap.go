@@ -28,11 +28,23 @@ func bootstrap(
 	}
 
 	fmt.Println("Bootstrapping chroot locally")
-	downloadTarball(
-		httpGetter,
-		config.RemoteBootstrapTarball,
-		filepath.Join(cwd, config.LocalBootstrapTarball),
-	)
+	var localPath = filepath.Join(cwd, config.LocalBootstrapTarball)
+	if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
+		if err != nil {
+			panic(err)
+		}
+		// err might be nil here, in which case the file exists, in which case
+		// we are happy and don't need to download it
+		fmt.Printf("File %s already exists, skipping download step.\n", localPath)
+		return
+	} else {
+		downloadTarball(
+			httpGetter,
+			config.RemoteBootstrapTarball,
+			localPath,
+		)
+	}
+
 	localRoot := extractTarball(config.LocalBootstrapTarball, cwd)
 	processFile(
 		filepath.Join(localRoot, "etc/pacman.d/mirrorlist"),
@@ -48,15 +60,6 @@ func bootstrap(
 
 // Download remote tarball to local disk, unless the localPath already exists.
 func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string) {
-	if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
-		// err might be nil here, in which case the file exists, in which case
-		// we are happy and don't need to download it
-		fmt.Printf("File %s already exists, skipping download step.\n", localPath)
-		if err != nil {
-			panic(err)
-		}
-		return
-	}
 	localFile, err := os.Create(localPath)
 	if err != nil {
 		panic(err)

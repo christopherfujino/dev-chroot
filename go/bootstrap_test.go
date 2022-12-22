@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,22 +10,26 @@ import (
 var config = Config{}
 
 func TestBootstrapDownload(t *testing.T) {
-	return
 	defer func() {
 		if r := recover(); r != nil {
 			err, ok := r.(error)
 			if !ok {
-				t.Errorf("Expected an os.ErrNotExist, got a %v", r)
+				t.Errorf("Expected an error, got an %v", r)
 			}
-			if !errors.Is(err, os.ErrNotExist) {
-				t.Errorf("Expected an os.ErrNotExist, got a %v", err)
+			if err.Error() != "Foo" {
+				t.Errorf("Expected \"Foo\", got %v", err.Error())
 			}
 			// success
+			check(
+				os.Remove("stuff.tar.gz"),
+				"Failed cleaning up test",
+			)
 		}
 	}()
+
 	downloadTarball(
 		func(url string) (*http.Response, error) {
-			panic(fmt.Errorf("Foo\n"))
+			panic(fmt.Errorf("Foo"))
 		},
 		"https://cloud.storage/stuff.tar.gz",
 		"stuff.tar.gz",
