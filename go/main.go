@@ -12,6 +12,11 @@ func main() {
 		"bootstrap",
 		flag.PanicOnError,
 	)
+	var uid = bootstrapCmd.Int(
+		"uid",
+		-1,
+		"user ID (required)",
+	)
 	attachCmd := flag.NewFlagSet(
 		"attach",
 		flag.PanicOnError,
@@ -38,11 +43,14 @@ func main() {
 			err,
 			fmt.Sprintf("parsing arguments to bootstrap: %v", os.Args[2:]),
 		)
+		if *uid == -1 {
+			panic("Must provide the --uid option")
+		}
 		if err != nil {
 			panic(err)
 		}
 
-		bootstrap(config, http.Get, cwd)
+		bootstrap(config, http.Get, cwd, *uid)
 	case "attach":
 		err := attachCmd.Parse(os.Args[2:])
 		check(

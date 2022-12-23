@@ -3,8 +3,6 @@ package main
 type Config struct {
 	RemoteBootstrapTarball string
 	LocalBootstrapTarball  string
-	//// Path on host where the chroot starts
-	//LocalDir string
 	// Name of user created within chroot
 	UserName string
 	UID      int
@@ -24,7 +22,7 @@ var defaultConfig = Config{
 	RemoteBootstrapTarball: "http://mirrors.ocf.berkeley.edu/archlinux/iso/2022.11.01/archlinux-bootstrap-x86_64.tar.gz",
 	LocalBootstrapTarball:  "archlinux-bootstrap.tar.gz",
 	UserName:               "coder",
-	UID:                    1000,
+	//UID:                    1000,
 	Repos: []Repo{
 		{
 			remoteUrl: "git@github.com:christopherfujino/chris-monorepo",
