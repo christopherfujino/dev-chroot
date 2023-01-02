@@ -3,12 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
-
-//   # chroot
-//   sudo "$LOCAL_DIR/bin/arch-chroot" "$LOCAL_DIR/" "/$RUNNER" 'initialize-root'
-// }
 
 func attach(config Config, cwd string) {
 	// TODO this should be passed in from main.go
@@ -23,7 +20,16 @@ func attach(config Config, cwd string) {
 	// TODO copy .ssh folder?
 
 	var archChroot = filepath.Join(localRoot, "bin", "arch-chroot")
-	Exec(archChroot, []string{localRoot, "su", "--login", config.UserName})
+	var cmd = exec.Command(archChroot, localRoot, "su", "--login", config.UserName)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	err := cmd.Run()
+	check(
+		err,
+		"running arch-chroot",
+	)
+	fmt.Println("Cleaning up from chroot...")
 }
 
 func createHashFile(hash string, filePath string) {
