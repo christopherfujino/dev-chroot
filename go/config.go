@@ -34,6 +34,8 @@ var defaultConfig = Config{
 	Provision: `
 #!/usr/bin/env bash
 
+set -x
+
 # setup public keyring for pacman
 pacman-key --init
 
@@ -60,8 +62,12 @@ pacman -S --needed \
 	fzf
 
 echo "Creating user {{.UserName}}..."
-useradd --create-home --uid {{.UID}} --shell /bin/bash {{.UserName}}
+# Don't create home, we will git clone the home dir
+useradd --uid {{.UID}} --shell /bin/bash {{.UserName}}
+mkdir /home/{{.UserName}}
+chown {{.UserName}}:{{.UserName}} /home/{{.UserName}}
+sudo -u {{.UserName}} git clone --progress --verbose ssh://github@github.com/christopherfujino/chris-monorepo /home/{{.UserName}}
 passwd coder
-echo "{{.UserName}} ALL=(ALL:ALL)" >> /etc/sudoers
+echo "{{.UserName}} ALL=(ALL:ALL) ALL" >> /etc/sudoers
 `,
 }
