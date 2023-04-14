@@ -19,7 +19,7 @@ type Repo struct {
 // hard-coded
 var defaultConfig = Config{
 	// See https://archlinux.org/download/
-	RemoteBootstrapTarball: "http://mirrors.ocf.berkeley.edu/archlinux/iso/2022.11.01/archlinux-bootstrap-x86_64.tar.gz",
+	RemoteBootstrapTarball: "https://mirrors.ocf.berkeley.edu/archlinux/iso/2023.04.01/archlinux-bootstrap-2023.04.01-x86_64.tar.gz",
 	LocalBootstrapTarball:  "archlinux-bootstrap.tar.gz",
 	UserName:               "coder",
 	//UID:                    1000,
