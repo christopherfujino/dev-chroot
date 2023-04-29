@@ -8,8 +8,13 @@ import (
 )
 
 func attach(config Config, cwd string) {
+	state, err := HydrateState(GetHome())
+	check(
+		err,
+		"Cannot attach without a state file first existing!",
+	)
 	// TODO this should be passed in from main.go
-	var localRoot = filepath.Join(cwd, "root.x86_64")
+	var localRoot = filepath.Join(state[cwd].WorkspaceRoot, "root")
 
 	// Get effective UID in case they are using sudo
 	uid := os.Geteuid()
@@ -24,7 +29,7 @@ func attach(config Config, cwd string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	err := cmd.Run()
+	err = cmd.Run()
 	check(
 		err,
 		"running arch-chroot",

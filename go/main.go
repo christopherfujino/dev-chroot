@@ -50,7 +50,7 @@ func main() {
 			panic(err)
 		}
 
-		bootstrap(config, http.Get, cwd, *uid)
+		bootstrap(config, http.Get, *uid, cwd)
 	case "attach":
 		err := attachCmd.Parse(os.Args[2:])
 		check(

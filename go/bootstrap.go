@@ -19,21 +19,45 @@ import (
 
 type HttpGetter func(url string) (*http.Response, error)
 
-// Should be run as root on the host
 func bootstrap(
 	config Config,
 	httpGetter HttpGetter,
-	cwd string,
 	uid int,
+	cwd string,
+) {
+	user := LookupUserFromPasswd(uid)
+	_, err := HydrateState(user.HomeDir)
+	if err == nil {
+		panic(
+			fmt.Sprintf("Cannot bootstrap while you already have a config file at %s", GetStateFilePath(user.HomeDir)),
+		)
+	}
+	if os.Getuid() != 0 {
+		panic("bootstrap should be called as root from the host")
+	}
+	bootstrap_internal(
+		config,
+		httpGetter,
+		uid,
+		cwd,
+		user,
+	)
+}
+
+// Should be run as root on the host
+func bootstrap_internal(
+	config Config,
+	httpGetter HttpGetter,
+	uid int,
+	cwd string,
+	user User,
 ) {
 	config.UID = uid
-	// Get effective UID in case they are using sudo
-	euid := os.Geteuid()
-	if euid != 0 {
-		panic(fmt.Errorf("bootstrap should be called as root from the host"))
-	}
+
+	states := InitState(cwd, user.HomeDir)
 
 	fmt.Println("Bootstrapping chroot locally")
+
 	var localPath = filepath.Join(cwd, config.LocalBootstrapTarball)
 	if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
 		if err != nil {
@@ -80,6 +104,8 @@ func bootstrap(
 			)
 		}
 	}
+
+	PersistStates(states, user.HomeDir)
 }
 
 // Download remote tarball to local disk, unless the localPath already exists.
@@ -100,8 +126,8 @@ func downloadTarball(httpGetter HttpGetter, remotePath string, localPath string)
 	}
 }
 
-func extractTarball(localTarball string, cwd string) string {
-	var absoluteTarballPath = filepath.Join(cwd, localTarball)
+func extractTarball(localTarball string, workspacePath string) string {
+	var absoluteTarballPath = filepath.Join(workspacePath, localTarball)
 	file, err := os.Open(absoluteTarballPath)
 	if err != nil {
 		panic(err)
@@ -123,12 +149,12 @@ func extractTarball(localTarball string, cwd string) string {
 			err,
 			fmt.Sprintf("reading %s", absoluteTarballPath),
 		)
-		newpath := filepath.Join(cwd, header.Name)
+		newpath := filepath.Join(workspacePath, header.Name)
 		switch header.Typeflag {
 		case tar.TypeDir: // Directory
 			if localRoot == "" {
 				// getRoot() will return root relative to CWD
-				localRoot = filepath.Join(cwd, getRoot(header.Name))
+				localRoot = filepath.Join(workspacePath, getRoot(header.Name))
 			}
 			os.Mkdir(newpath, fs.FileMode(header.Mode))
 			err := os.Chown(newpath, header.Uid, header.Gid)
@@ -147,7 +173,7 @@ func extractTarball(localTarball string, cwd string) string {
 			file.Close()
 		case tar.TypeLink: // Hard link
 			var destination = newpath
-			var source = filepath.Join(cwd, header.Linkname)
+			var source = filepath.Join(workspacePath, header.Linkname)
 			linkQueue.TryHardlink(
 				source,
 				destination,
@@ -164,7 +190,7 @@ func extractTarball(localTarball string, cwd string) string {
 			var source string
 			if filepath.IsAbs(header.Linkname) {
 				var rootPath = getRoot(header.Name)
-				source = filepath.Join(cwd, rootPath, header.Linkname)
+				source = filepath.Join(workspacePath, rootPath, header.Linkname)
 			} else {
 				source = header.Linkname
 			}
