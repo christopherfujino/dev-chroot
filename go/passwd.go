@@ -24,10 +24,14 @@ func LookupUserFromPasswd(id int) User {
 		"Failed reading /etc/passwd from disk",
 	)
 	lines := strings.Split(string(passwdBytes), "\n")
-	for _, line := range lines {
+	for idx, line := range lines {
+		if len(line) == 0 {
+			// skip empty lines
+			continue
+		}
 		fields := strings.Split(line, ":")
 		if len(fields) != 7 {
-			panic(fmt.Sprintf("Unexpected number of fields in %s", line))
+			panic(fmt.Sprintf("Unexpected number of fields in line no %v: %s", idx + 1, line))
 		}
 		uid, err := strconv.Atoi(fields[2])
 		check(
