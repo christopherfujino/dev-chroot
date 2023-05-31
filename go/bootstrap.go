@@ -24,12 +24,13 @@ func bootstrap(
 	httpGetter HttpGetter,
 	uid int,
 	cwd string,
+	homeDir string,
 ) {
-	user := LookupUserFromPasswd(uid)
-	_, err := HydrateState(user.HomeDir)
+	//user := LookupUserFromPasswd(uid)
+	_, err := HydrateState(homeDir)
 	if err == nil {
 		panic(
-			fmt.Sprintf("Cannot bootstrap while you already have a config file at %s", GetStateFilePath(user.HomeDir)),
+			fmt.Sprintf("Cannot bootstrap while you already have a config file at %s", GetStateFilePath(homeDir)),
 		)
 	}
 	if os.Getuid() != 0 {
@@ -40,7 +41,7 @@ func bootstrap(
 		httpGetter,
 		uid,
 		cwd,
-		user,
+		homeDir,
 	)
 }
 
@@ -50,11 +51,11 @@ func bootstrap_internal(
 	httpGetter HttpGetter,
 	uid int,
 	cwd string,
-	user User,
+	homeDir string,
 ) {
 	config.UID = uid
 
-	states := InitState(cwd, user.HomeDir)
+	states := InitState(cwd, homeDir)
 
 	fmt.Println("Bootstrapping chroot locally")
 
@@ -105,7 +106,7 @@ func bootstrap_internal(
 		}
 	}
 
-	PersistStates(states, user.HomeDir)
+	PersistStates(states, homeDir)
 }
 
 // Download remote tarball to local disk, unless the localPath already exists.

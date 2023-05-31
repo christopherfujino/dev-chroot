@@ -17,6 +17,11 @@ func main() {
 		-1,
 		"user ID (required)",
 	)
+	var homeDir = bootstrapCmd.String(
+		"home-dir",
+		"",
+		"path to home directory (required)",
+	)
 	attachCmd := flag.NewFlagSet(
 		"attach",
 		flag.PanicOnError,
@@ -46,11 +51,14 @@ func main() {
 		if *uid == -1 {
 			panic("Must provide the --uid option")
 		}
+		if *homeDir == "" {
+			panic("Must provide the --home-dir option")
+		}
 		if err != nil {
 			panic(err)
 		}
 
-		bootstrap(config, http.Get, *uid, cwd)
+		bootstrap(config, http.Get, *uid, cwd, *homeDir)
 	case "attach":
 		err := attachCmd.Parse(os.Args[2:])
 		check(
